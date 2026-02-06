@@ -3,7 +3,7 @@ import { Button, Input, Typography, Alert } from 'antd';
 import { useLogin } from '../../features/auth/model/useLogin';
 
 export const LoginPage = () => {
-  const { mutate, isLoading, isError, error } = useLogin();
+  const { mutate, isPending, isError, error } = useLogin();
 
   const [loginValue, setLoginValue] = useState('');
   const [passwordValue, setPasswordValue] = useState('');
@@ -20,7 +20,11 @@ export const LoginPage = () => {
       <Typography.Title level={3}>Авторизация</Typography.Title>
 
       {isError && (
-        <Alert type="error" message={error instanceof Error ? error.message : 'Ошибка'} />
+        <Alert
+          type="error"
+          message={error instanceof Error ? error.message : 'Ошибка'}
+          style={{ marginBottom: 12 }}
+        />
       )}
 
       <Input
@@ -37,7 +41,7 @@ export const LoginPage = () => {
         style={{ marginBottom: 16 }}
       />
 
-      <Button type="primary" onClick={onSubmit} loading={isLoading} block>
+      <Button type="primary" onClick={onSubmit} loading={isPending} block>
         Войти
       </Button>
     </div>
