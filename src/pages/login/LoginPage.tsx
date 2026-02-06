@@ -1,18 +1,25 @@
 import React, { useState } from 'react';
 import { Button, Input, Typography, Alert } from 'antd';
+import { useNavigate } from 'react-router-dom';
 import { useLogin } from '../../features/auth/model/useLogin';
 
 export const LoginPage = () => {
   const { mutate, isPending, isError, error } = useLogin();
+  const navigate = useNavigate();
 
   const [loginValue, setLoginValue] = useState('');
   const [passwordValue, setPasswordValue] = useState('');
 
   const onSubmit = () => {
-    mutate({
-      login: loginValue,
-      password: passwordValue
-    });
+    mutate(
+      {
+        login: loginValue,
+        password: passwordValue
+      },
+      {
+        onSuccess: () => navigate('/users', { replace: true })
+      }
+    );
   };
 
   return (
@@ -23,7 +30,7 @@ export const LoginPage = () => {
         <Alert
           type="error"
           message={error instanceof Error ? error.message : 'Ошибка'}
-          style={{ marginBottom: 12 }}
+          style={{ marginBottom: 16 }}
         />
       )}
 
