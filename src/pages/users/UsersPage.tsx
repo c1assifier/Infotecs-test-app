@@ -1,9 +1,20 @@
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Form, Input, Modal, Space, Spin, Typography, message } from 'antd';
+import {
+  Alert,
+  Button,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Space,
+  Spin,
+  Typography,
+  message
+} from 'antd';
 import { authStorage } from '../../features/auth/model/auth.storage';
 import { useNavigate } from 'react-router-dom';
-import { createUser, fetchUsers, updateUser } from '../../entities/user/api/user.api';
+import { createUser, deleteUser, fetchUsers, updateUser } from '../../entities/user/api/user.api';
 import { UserList } from '../../entities/user/ui/UserList';
 import { User } from '../../entities/user/model/user.types';
 
@@ -15,7 +26,7 @@ export const UsersPage = () => {
   const [editingUser, setEditingUser] = React.useState<User | null>(null);
 
   const [createForm] = Form.useForm<{ name: string; avatar: string }>();
-  const [editForm] = Form.useForm<{ name: string; avatar: string }>();
+  const [editForm] = Form.useForm<{ id: string; name: string; avatar: string }>();
 
   const onLogout = () => {
     authStorage.removeToken();
@@ -54,6 +65,32 @@ export const UsersPage = () => {
     }
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: deleteUser,
+    onSuccess: async () => {
+      message.success('Пользователь удалён');
+      setEditingUser(null);
+      editForm.resetFields();
+      await queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (err) => {
+      message.error(err instanceof Error ? err.message : 'Ошибка удаления пользователя');
+    }
+  });
+
+  const urlRules = [
+    { required: true, message: 'Введите ссылку на аватар' },
+    { type: 'url' as const, message: 'Введите корректную ссылку' },
+    {
+      validator: async (_: unknown, value: string) => {
+        if (!value) return;
+        if (!/^https?:\/\//i.test(value)) {
+          throw new Error('Ссылка должна начинаться с http:// или https://');
+        }
+      }
+    }
+  ];
+
   const openCreateModal = () => {
     createForm.setFieldsValue({
       name: '',
@@ -65,10 +102,14 @@ export const UsersPage = () => {
   const openEditModal = (user: User) => {
     setEditingUser(user);
     editForm.setFieldsValue({
+      id: user.id,
       name: user.name,
       avatar: user.avatar
     });
   };
+
+  const isCreateBusy = createMutation.isPending;
+  const isEditBusy = updateMutation.isPending || deleteMutation.isPending;
 
   return (
     <div style={{ maxWidth: 600, margin: '40px auto' }}>
@@ -106,10 +147,18 @@ export const UsersPage = () => {
       <Modal
         title="Создать пользователя"
         open={isCreateModalOpen}
-        onCancel={() => setIsCreateModalOpen(false)}
+        closable={!isCreateBusy}
+        maskClosable={!isCreateBusy}
+        keyboard={!isCreateBusy}
+        cancelButtonProps={{ disabled: isCreateBusy }}
+        okButtonProps={{ disabled: isCreateBusy }}
+        onCancel={() => {
+          if (isCreateBusy) return;
+          setIsCreateModalOpen(false);
+        }}
         okText="Создать"
         cancelText="Отмена"
-        confirmLoading={createMutation.isPending}
+        confirmLoading={isCreateBusy}
         onOk={async () => {
           const values = await createForm.validateFields();
           createMutation.mutate(values);
@@ -123,30 +172,68 @@ export const UsersPage = () => {
           >
             <Input placeholder="Иван Иванов" />
           </Form.Item>
-          <Form.Item
-            label="Аватар (URL)"
-            name="avatar"
-            rules={[{ required: true, message: 'Введите ссылку на аватар' }]}
-          >
+          <Form.Item label="Ссылка на аватарку" name="avatar" rules={urlRules}>
             <Input placeholder="https://..." />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="Редактировать пользователя"
+        title="Редактирование пользователя"
         open={Boolean(editingUser)}
-        onCancel={() => setEditingUser(null)}
-        okText="Сохранить"
-        cancelText="Отмена"
-        confirmLoading={updateMutation.isPending}
-        onOk={async () => {
-          if (!editingUser) return;
-          const values = await editForm.validateFields();
-          updateMutation.mutate({ id: editingUser.id, ...values });
+        closable={!isEditBusy}
+        maskClosable={!isEditBusy}
+        keyboard={!isEditBusy}
+        onCancel={() => {
+          if (isEditBusy) return;
+          setEditingUser(null);
         }}
+        footer={
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <Popconfirm
+              title="Удалить пользователя?"
+              okText="Удалить"
+              cancelText="Отмена"
+              okButtonProps={{ danger: true, disabled: isEditBusy }}
+              cancelButtonProps={{ disabled: isEditBusy }}
+              onConfirm={() => {
+                if (!editingUser) return;
+                deleteMutation.mutate(editingUser.id);
+              }}
+              disabled={isEditBusy}
+            >
+              <Button danger disabled={isEditBusy} loading={deleteMutation.isPending}>
+                Удалить
+              </Button>
+            </Popconfirm>
+
+            <Space>
+              <Button
+                onClick={() => setEditingUser(null)}
+                disabled={isEditBusy}
+              >
+                Отмена
+              </Button>
+              <Button
+                type="primary"
+                disabled={isEditBusy}
+                loading={updateMutation.isPending}
+                onClick={async () => {
+                  if (!editingUser) return;
+                  const values = await editForm.validateFields();
+                  updateMutation.mutate({ id: values.id, name: values.name, avatar: values.avatar });
+                }}
+              >
+                Сохранить
+              </Button>
+            </Space>
+          </div>
+        }
       >
         <Form form={editForm} layout="vertical">
+          <Form.Item label="id" name="id">
+            <Input disabled />
+          </Form.Item>
           <Form.Item
             label="Имя"
             name="name"
@@ -154,11 +241,7 @@ export const UsersPage = () => {
           >
             <Input placeholder="Иван Иванов" />
           </Form.Item>
-          <Form.Item
-            label="Аватар (URL)"
-            name="avatar"
-            rules={[{ required: true, message: 'Введите ссылку на аватар' }]}
-          >
+          <Form.Item label="Ссылка на аватарку" name="avatar" rules={urlRules}>
             <Input placeholder="https://..." />
           </Form.Item>
         </Form>
